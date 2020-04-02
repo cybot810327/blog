@@ -1,0 +1,10 @@
+code { 
+    background: hsl(225, 3%, 53%); 
+}
+
+pre {
+    white-space: pre-wrap;
+    background: hsl(225, 3%, 53%);
+    border-radius: 7px 7px 7px 7px;
+    text-align: left;
+}

@@ -21,6 +21,7 @@
         
     <!-- Theme CSS -->  
     <link id="theme-style" rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="./assets/css/code.css">
 
     
 </head> 
@@ -40,7 +41,7 @@
                     <div class="section-inner">
                         <div class="content">    
                             <div class="item featured text-center">
-                                <h3 class="title"><a href="#" target="_blank">Sentry-X</a></h3>
+                                <h3 class="title"><a href="#">Sentry-X</a></h3>
                                 <p class="summary">
                                     The Sentry-X platform's primary use is to manage OTP (one time Pin) codes used by armed response companies to
                                         gain access to the client's property. This is used in conjunction with a wireless keypad. A 6 digit random
@@ -108,8 +109,83 @@
 
                                         The link to the HTTP request is <a href="https://cloud.martin-electronics.co.za/api/otp">https://cloud.martin-electronics.co.za/api/otp</a>
 
+                                        <br/><br/>
+                                        Below is some exmple code to process the Http POST request
                                     </p>
                                 </div><!--//desc--> 
+                            </div>
+                            <div class="item text-left">
+                                <pre>
+                                    <code>
+    [HttpPost]
+    public async Task&ltstring&gt RequestOtpCode ()
+    {
+        string result = await Request.Content.ReadAsStringAsync();
+
+        mOTPReqCred reqCred = new json().DecodeJsonStructure&ltmOTPReqCred&gt(result);
+
+        mOTPReq otp_resp = new mOTPReq();
+
+        mySQL MySQL = new mySQL();
+        file FileHandle = new file();
+        DataCoverter conv = new DataCoverter();
+
+        string UserName = conv.ConvertData(reqCred.UserName, DataCoverter.ConvertHandle.ENCRYPT_DATA);
+        string Password = conv.ConvertData(reqCred.Password, DataCoverter.ConvertHandle.ENCRYPT_DATA);
+
+        if (MySQL.VerifyUserLoginDetails(UserName, Password, "mUser"))
+        {
+            // check if client is active
+            if (MySQL.DB_isClientActive(UserName))
+            {
+                string clientfolder = MySQL.getFolderName(UserName);
+                string kpd_descr = MySQL.getKpdDescriptionFromDB(reqCred.KpdSerial, conv.ConvertData(clientfolder, DataCoverter.ConvertHandle.DECRYPT_DATA));
+
+                DecryptOTP getOTPCode = new DecryptOTP();
+                string[] OTPResult = new string[2];
+                OTPResult = getOTPCode.DecryptOTPCode(kpd_descr, reqCred.UserName);
+
+                OtpLog otpLog = new OtpLog
+                {
+                    DateAndTime = DateTime.Now,
+                    KpdDecsription = kpd_descr,
+                    KpdSerialNo = MySQL.getKeypadSNFromDB(kpd_descr, conv.ConvertData(clientfolder, DataCoverter.ConvertHandle.DECRYPT_DATA)),
+                    CodeIssuedTo = reqCred.IssuedTo,
+                    CodeIssuedBy = reqCred.IssuedBy,
+                    LoggedinUser = reqCred.UserName
+                };
+
+                string FolderName = conv.ConvertData(MySQL.getFolderName(conv.ConvertData(reqCred.UserName, DataCoverter.ConvertHandle.ENCRYPT_DATA)), DataCoverter.ConvertHandle.DECRYPT_DATA);
+                FileHandle.AddOTPEntryToLogFile(otpLog, conv.ConvertData(FolderName, DataCoverter.ConvertHandle.ENCRYPT_DATA));
+
+                otp_resp.KpdSerialNo = reqCred.KpdSerial;                               // keypad serial number
+                otp_resp.OtpCode = OTPResult[1];                                  // otp code
+                otp_resp.RemainingCodes = MySQL.getRemainingCodes(conv.ConvertData(clientfolder, DataCoverter.ConvertHandle.DECRYPT_DATA), reqCred.KpdSerial);  // codes left
+                otp_resp.ServerMessage = "Code Processed OK";                                  // server message
+
+            }
+            else
+            {
+                // return list 
+                otp_resp.KpdSerialNo = reqCred.KpdSerial;
+                otp_resp.OtpCode = "-";
+                otp_resp.RemainingCodes = "-";
+                otp_resp.ServerMessage = "Client not active";
+            }
+        }
+        else
+        {
+            // return list 
+            otp_resp.KpdSerialNo = reqCred.KpdSerial;
+            otp_resp.OtpCode = "-";
+            otp_resp.RemainingCodes = "-";
+            otp_resp.ServerMessage = "Username and Password Error";
+        }
+
+        return new json().ConvertOjectToJsonNonIndented(otp_resp);
+    }
+                                    </code>
+                                </pre>
                             </div>
                         </div>
                     </div>
